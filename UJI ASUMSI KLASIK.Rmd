@@ -1,0 +1,158 @@
+---
+title: "UJI ASUMSI KLASIK"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+## **What is one-way ANOVA test?**
+The one-way analysis of variance (ANOVA), also known as one-factor ANOVA, is an extension of independent two-samples t-test for comparing means in a situation where there are more than two groups. In one-way ANOVA, the data is organized into several groups base on one single grouping variable (also called factor variable). This tutorial describes the basic principle of the one-way ANOVA test and provides practical anova test examples in R software.
+
+## **Assumptions of ANOVA test**
+Here we describe the requirement for **ANOVA test**. ANOVA test can be applied only when:
+- The observations are obtained independently and randomly from the population defined by the factor levels**
+- The data of each factor level are normally distributed.
+- These normal populations have a common variance. (Levene’s test can be used to check this.)
+
+
+**Packages Required**
+**install.packages(agricolae)**
+**install.packages(ggpubr)**
+
+**Additional tools**
+**if(!require(devtools)) install.packages("devtools")**
+**devtools::install_github("kassambara/ggpubr")**
+
+
+## **Import your data into R**
+```{r}
+## Loading the iris data
+data("iris")
+head(iris)
+str(iris)
+levels(iris$Species)
+```
+## **Compute summary statistics by groups - count, mean, sd:**
+```{r}
+library(dplyr)
+group_by(iris, Species) %>%
+  summarise(
+    count = n(),
+    mean = mean(Sepal.Length, na.rm = TRUE),
+    sd = sd(Sepal.Length, na.rm = TRUE)
+  )
+```
+## **Visualize your data**
+```{r}
+# Box plots
+# ++++++++++++++++++++
+# Plot Sepal Lenght by Species and color by Species
+library("ggpubr")
+ggboxplot(iris, x = "Species", y = "Sepal.Length", 
+          color = "Species", palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+          order = c("setosa", "versicolor", "virginica"),
+          ylab = "Sepal Length (cm)", xlab = "Species")
+```
+```{r}
+# Mean plots
+# ++++++++++++++++++++
+# Plot Sepal Lenght by Species 
+# Add error bars: mean_se
+# (other values include: mean_sd, mean_ci, median_iqr, ....)
+library("ggpubr")
+ggline(iris, x = "Species", y = "Sepal.Length",
+          add = c("mean_se", "jitter"),
+          order = c("setosa", "versicolor", "virginica"),
+          ylab = "Sepal Length (cm)", xlab = "Species")
+```
+## *Compute one-way ANOVA test*
+
+```{r}
+library(agricolae)
+AOV <- aov(Sepal.Length ~ Species, iris)
+summary(AOV)
+```
+## **Interpret the result of one-way ANOVA tests**
+
+As the p-value is less than the significance level 0.05, we can conclude that there are ## significant differences between the groups highlighted with “*" in the model summary.
+
+
+## **Multiple pairwise-comparison between the means of groups**
+In one-way ANOVA test, a significant p-value indicates that some of the group means are different, but we don’t know which pairs of groups are different.
+
+It’s possible to perform multiple pairwise-comparison, to determine if the mean difference between specific pairs of group are statistically significant.
+
+## **Tukey multiple pairwise-comparisons**
+As the ANOVA test is significant, we can compute Tukey HSD (Tukey Honest Significant Differences, R function: TukeyHSD()) for performing multiple pairwise-comparison between the means of groups.
+
+The function **HSD.test()** takes the fitted ANOVA as an argument.
+```{r}
+TUKEY<-HSD.test(AOV, "Species", console= TRUE)
+```
+## **Plot Tukey multiple pairwise-comparisons**
+```{r}
+plot(TUKEY, main = "TUKEY HSD PLOT")
+```
+
+## **Check ANOVA assumptions: test validity?**
+The ANOVA test assumes that, the data are normally distributed and the variance across groups are homogeneous. We can check that with some diagnostic plots.
+
+### **1. Homogeneity of variances**
+```{r}
+plot(AOV, 1)
+```
+Points 132, 138 are detected as outliers, which can severely affect normality and homogeneity of variance. It can be useful to remove outliers to meet the test assumptions.
+
+**It’s also possible to use Bartlett’s test or Levene’s test to check the homogeneity of variances.**
+
+We recommend Levene’s test, which is less sensitive to departures from normal distribution. The function **leveneTest()** [in **car** package] will be used:
+
+```{r}
+library(car)
+leveneTest(Sepal.Length ~ Species, iris)
+```
+From the output above we can see that the p-value is less than the significance level of 0.05. This means that there is evidence to suggest that the variance across groups is statistically significantly different. Therefore, we can assume the non homogeneity of variances in the different treatment groups.
+
+### **2.Relaxing the homogeneity of variance assumption**
+The classical one-way ANOVA test requires an assumption of equal variances for all groups. In our example, the homogeneity of variance assumption turned out to be fine: the Levene test is not significant.
+
+An alternative procedure (i.e.: **Welch one-way test**), that does not require that assumption have been implemented in the function **oneway.test()**.
+
+- **ANOVA test with no assumption of equal variances**
+```{r}
+oneway.test(Sepal.Length ~ Species, iris)
+```
+
+- **Pairwise t-tests with no assumption of equal variances**
+```{r}
+pairwise.t.test(iris$Sepal.Length, iris$Species,
+                 p.adjust.method = "BH", pool.sd = FALSE)
+```
+
+### **3.Check the normality assumption**
+Normality plot of residuals. In the plot below, the quantiles of the residuals are plotted against the quantiles of the normal distribution. A 45-degree reference line is also plotted.
+
+The normal probability plot of residuals is used to check the assumption that the residuals are normally distributed. It should approximately follow a straight line.
+```{r}
+plot(AOV, 2)
+```
+As all the points fall approximately along this reference line, we can assume normality.
+
+The conclusion above, is supported by the **Shapiro-Wilk test** on the ANOVA residuals (W = 0.96, p = 0.6) which finds no indication that normality is violated.
+```{r}
+# Extract the residuals
+aov_residuals <- residuals(object = AOV )
+# Run Shapiro-Wilk test
+shapiro.test(x = aov_residuals )
+```
+
+## **Non-parametric alternative to one-way ANOVA test**
+Note that, a non-parametric alternative to one-way ANOVA is Kruskal-Wallis rank sum test, which can be used when ANNOVA assumptions are not met.
+
+```{r}
+kruskal.test(Sepal.Length ~ Species, iris)
+```
+
